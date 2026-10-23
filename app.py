@@ -29,6 +29,16 @@ from rl_trading_lab.training import (
     train,
 )
 
+
+def format_currency(val: float | None, include_sign: bool = False) -> str:
+    """Format numeric values as currency with optional leading sign."""
+    if val is None:
+        return "—"
+    if include_sign:
+        sign = "+" if val > 0 else ("-" if val < 0 else "")
+        return f"{sign}${abs(val):,.2f}"
+    return f"${val:,.2f}"
+
 # Page Configuration
 st.set_page_config(
     page_title="RL Trading Lab — Cyber Command Center",
@@ -272,7 +282,7 @@ if run_sim or "sim_result" in st.session_state:
         st.metric(
             label="Portfolio Value",
             value=f"${d.evaluation.policy_value:,.2f}",
-            delta=f"{net_pnl:+$0.2f} ({net_pnl_pct:+.2f}%)",
+            delta=f"{format_currency(net_pnl, include_sign=True)} ({net_pnl_pct:+.2f}%)",
         )
 
     with kpi2:
@@ -472,9 +482,7 @@ if run_sim or "sim_result" in st.session_state:
                     "Shares": t.shares,
                     "Value ($)": f"${t.cost_or_proceed:,.2f}",
                     "Fee ($)": f"${t.fee:,.2f}",
-                    "Realized P&L ($)": (
-                        f"{t.realized_pnl:+$0.2f}" if t.realized_pnl is not None else "—"
-                    ),
+                    "Realized P&L ($)": format_currency(t.realized_pnl, include_sign=True),
                     "ROI (%)": (
                         f"{t.realized_pnl_pct:+.2f}%" if t.realized_pnl_pct is not None else "—"
                     ),

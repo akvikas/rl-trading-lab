@@ -291,7 +291,8 @@ def main() -> None:
     print(f"Held-out buy-and-hold:     ${detailed.evaluation.buy_and_hold_value:,.2f}")
     print(f"Total trades executed:     {detailed.total_trades}")
     print(f"Win rate:                  {detailed.win_rate:.1f}% ({detailed.winning_trades}W / {detailed.losing_trades}L)")
-    print(f"Total realized profit:     ${detailed.total_realized_profit:+,.2f}")
+    sign = "+" if detailed.total_realized_profit >= 0 else "-"
+    print(f"Total realized profit:     {sign}${abs(detailed.total_realized_profit):,.2f}")
     print(f"Total fees incurred:       ${detailed.total_fees_paid:,.2f}")
     print(f"Max drawdown:              {detailed.max_drawdown:.2f}%")
 
