@@ -2,7 +2,7 @@ import math
 import unittest
 
 from rl_trading_lab.environment import TradingEnvironment
-from rl_trading_lab.training import train
+from rl_trading_lab.training import evaluate_policy_detailed, train
 
 
 class EndToEndSmokeTests(unittest.TestCase):
@@ -45,6 +45,29 @@ class EndToEndSmokeTests(unittest.TestCase):
         self.assertTrue(math.isfinite(result.buy_and_hold_value))
         self.assertGreater(result.portfolio_value, 0.0)
         self.assertGreater(result.buy_and_hold_value, 0.0)
+
+    def test_detailed_policy_run_ledger(self):
+        """Verifies that detailed evaluation extracts valid trade ledger and profit metrics."""
+        agent, _ = train(episodes=15, seed=7, regime="mean_reverting")
+        detailed = evaluate_policy_detailed(agent, seed=1007, regime="mean_reverting")
+
+        self.assertGreater(len(detailed.prices), 0)
+        self.assertEqual(len(detailed.prices), len(detailed.policy_values))
+        self.assertIsInstance(detailed.total_trades, int)
+        self.assertGreaterEqual(detailed.win_rate, 0.0)
+        self.assertLessEqual(detailed.win_rate, 100.0)
+        self.assertTrue(math.isfinite(detailed.max_drawdown))
+        self.assertTrue(math.isfinite(detailed.total_fees_paid))
+        self.assertGreaterEqual(detailed.total_fees_paid, 0.0)
+
+        # Verify trade records have valid types and values
+        for trade in detailed.trades:
+            self.assertIn(trade.action, ("BUY", "SELL"))
+            self.assertGreater(trade.price, 0.0)
+            self.assertGreater(trade.shares, 0)
+            self.assertTrue(math.isfinite(trade.fee))
+            if trade.realized_pnl is not None:
+                self.assertTrue(math.isfinite(trade.realized_pnl))
 
 
 if __name__ == "__main__":
