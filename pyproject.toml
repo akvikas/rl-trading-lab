@@ -9,6 +9,39 @@ description = "An educational, dependency-free Q-learning trading sandbox"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
+authors = [
+    {name = "Vikas AK", email = "akvikas14@gmail.com"}
+]
+keywords = ["reinforcement-learning", "q-learning", "trading", "finance-simulation", "python"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+rl-trading-lab = "rl_trading_lab.training:main"
+rl-benchmark = "rl_trading_lab.benchmark:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+pythonpath = ["src"]
