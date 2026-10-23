@@ -1,14 +1,19 @@
 # RL Trading Lab
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit%20Cloud-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://rl-trading-lab-ptfwpyqvttkq2k2morzc3l.streamlit.app/)
 [![CI](https://github.com/akvikas/rl-trading-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/akvikas/rl-trading-lab/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests: Pytest](https://img.shields.io/badge/tests-pytest-green.svg)](https://docs.pytest.org/)
 
-An educational, dependency-free Python reinforcement learning sandbox engineered to model, train, and benchmark tabular Q-learning policies against passive buy-and-hold baselines on synthetic price trajectories.
+An educational Python reinforcement learning sandbox engineered to model, train, and benchmark tabular Q-learning policies against passive buy-and-hold baselines on synthetic price trajectories.
+
+[**🚀 Launch Interactive Streamlit Dashboard**](https://rl-trading-lab-ptfwpyqvttkq2k2morzc3l.streamlit.app/)
+
+![Held-out equity curve](docs/held-out-equity-curve.svg)
 
 > [!IMPORTANT]
-> **Financial & Research Disclosure:** This repository is an educational software engineering project modeling reinforcement learning mechanics, out-of-sample statistical evaluation, and reproducible simulation. It operates on synthetic Geometric Brownian Motion data and includes transaction fees; it does **not** model real-world slippage, order books, or market microstructure and is **not** investment advice.
+> **Financial & Research Disclosure:** This repository is an educational software engineering project modeling reinforcement learning mechanics, out-of-sample statistical evaluation, and reproducible simulation. It operates on synthetic market regimes (`gbm`, `trend`, `mean_reverting`) and models transaction fees; it does **not** model real-world slippage, order books, or market microstructure and is **not** investment advice.
 
 ---
 
@@ -136,10 +141,21 @@ Evaluate the trained agent against passive Buy-and-Hold and Uniform Random polic
 
 ```bash
 # Using CLI entry point
-rl-benchmark --train-episodes 500 --eval-seeds 50
+rl-benchmark --train-episodes 500 --eval-seeds 50 --regime mean_reverting
 
 # Or directly via Python module
-python -m rl_trading_lab.benchmark --train-episodes 500 --eval-seeds 50
+python -m rl_trading_lab.benchmark --train-episodes 500 --eval-seeds 50 --regime mean_reverting
+```
+
+### 3. Run the Streamlit Dashboard Locally
+Launch the interactive web UI with real-time equity curves and held-out simulation metrics:
+
+```bash
+# Install dashboard visualization dependencies
+pip install -r requirements.txt
+
+# Launch Streamlit app
+streamlit run app.py
 ```
 
 ---

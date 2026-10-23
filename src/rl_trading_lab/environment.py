@@ -5,10 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import exp, sqrt
 from random import Random
+from typing import Literal
 
 
 HOLD, BUY, SELL = range(3)
 ACTIONS = (HOLD, BUY, SELL)
+MarketRegime = Literal["gbm", "trend", "mean_reverting"]
 
 
 @dataclass(frozen=True)
@@ -19,21 +21,25 @@ class EpisodeResult:
 
 
 class TradingEnvironment:
-    """Long-only one-share simulator with discrete observations.
+    """Long-only, fully-invested simulator with discrete observations.
 
     A reset creates a synthetic price path, keeping experiments reproducible
     when the same seed is supplied.
     """
 
     def __init__(self, steps: int = 252, initial_cash: float = 10_000.0,
-                 transaction_cost: float = 0.001, seed: int | None = 7) -> None:
+                 transaction_cost: float = 0.001, seed: int | None = 7,
+                 regime: MarketRegime = "gbm") -> None:
         if steps < 2:
             raise ValueError("steps must be at least 2")
         if initial_cash <= 0:
             raise ValueError("initial_cash must be positive")
+        if regime not in {"gbm", "trend", "mean_reverting"}:
+            raise ValueError(f"unknown market regime: {regime}")
         self.steps = steps
         self.initial_cash = initial_cash
         self.transaction_cost = transaction_cost
+        self.regime = regime
         self._rng = Random(seed)
         self.prices: list[float] = []
         self.reset()
@@ -50,10 +56,21 @@ class TradingEnvironment:
         price = 100.0
         prices = [price]
         daily_drift, daily_volatility = 0.00025, 0.012
+        previous_return = 0.0
         for _ in range(self.steps - 1):
             shock = self._rng.gauss(0, 1)
-            price *= exp((daily_drift - daily_volatility ** 2 / 2) + daily_volatility * shock)
+            # GBM has no predictable next-day component. The other regimes
+            # deliberately make the observed return informative about the next
+            # one, which lets this small tabular state learn a real signal.
+            autocorrelation = {"gbm": 0.0, "trend": 0.35, "mean_reverting": -0.35}[self.regime]
+            log_return = (
+                daily_drift - daily_volatility ** 2 / 2
+                + autocorrelation * previous_return
+                + daily_volatility * shock
+            )
+            price *= exp(log_return)
             prices.append(round(price, 4))
+            previous_return = log_return
         return prices
 
     @property
@@ -77,12 +94,13 @@ class TradingEnvironment:
 
         price = self.prices[self.index]
         if action == BUY and self.shares == 0:
-            total = price * (1 + self.transaction_cost)
-            if self.cash >= total:
-                self.cash -= total
-                self.shares = 1
+            cost_per_share = price * (1 + self.transaction_cost)
+            quantity = int(self.cash // cost_per_share)
+            if quantity:
+                self.cash -= quantity * cost_per_share
+                self.shares = quantity
         elif action == SELL and self.shares:
-            self.cash += price * (1 - self.transaction_cost)
+            self.cash += self.shares * price * (1 - self.transaction_cost)
             self.shares = 0
 
         self.index += 1
@@ -93,8 +111,10 @@ class TradingEnvironment:
         return self.state, reward, done, {"portfolio_value": value}
 
     def result(self) -> EpisodeResult:
+        buy_and_hold_shares = int(self.initial_cash // (self.prices[0] * (1 + self.transaction_cost)))
+        buy_and_hold_cash = self.initial_cash - buy_and_hold_shares * self.prices[0] * (1 + self.transaction_cost)
         return EpisodeResult(
             portfolio_value=self.value,
-            buy_and_hold_value=self.initial_cash / self.prices[0] * self.prices[-1],
+            buy_and_hold_value=buy_and_hold_cash + buy_and_hold_shares * self.prices[-1],
             steps=self.index,
         )

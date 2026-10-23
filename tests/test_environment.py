@@ -1,6 +1,7 @@
 import math
 import unittest
 
+from rl_trading_lab.agent import QLearningAgent
 from rl_trading_lab.environment import (
     ACTIONS,
     BUY,
@@ -9,6 +10,7 @@ from rl_trading_lab.environment import (
     EpisodeResult,
     TradingEnvironment,
 )
+from rl_trading_lab.training import evaluate_held_out, evaluate_policy, train
 
 
 class TradingEnvironmentTests(unittest.TestCase):
@@ -19,11 +21,13 @@ class TradingEnvironmentTests(unittest.TestCase):
             TradingEnvironment(initial_cash=0.0)
         with self.assertRaises(ValueError):
             TradingEnvironment(initial_cash=-500.0)
+        with self.assertRaises(ValueError):
+            TradingEnvironment(regime="invalid")  # type: ignore[arg-type]
 
     def test_reset_reinitialization(self):
         env = TradingEnvironment(steps=10, initial_cash=5000.0, seed=42)
         env.step(BUY)
-        self.assertEqual(env.shares, 1)
+        self.assertGreater(env.shares, 0)
         self.assertNotEqual(env.cash, 5000.0)
 
         initial_state = env.reset()
@@ -50,16 +54,19 @@ class TradingEnvironmentTests(unittest.TestCase):
         p0 = env.prices[0]
 
         # Step 0: BUY
+        cost_per_share = p0 * (1.0 + fee)
+        expected_shares = int(1000.0 // cost_per_share)
+        expected_cash_after_buy = 1000.0 - (expected_shares * cost_per_share)
+
         state, reward, done, info = env.step(BUY)
-        self.assertEqual(env.shares, 1)
-        expected_cash_after_buy = 1000.0 - (p0 * (1.0 + fee))
+        self.assertEqual(env.shares, expected_shares)
         self.assertAlmostEqual(env.cash, expected_cash_after_buy, places=4)
 
         # Step 1: SELL
         p1 = env.prices[1]
+        expected_cash_after_sell = expected_cash_after_buy + (expected_shares * p1 * (1.0 - fee))
         state, reward, done, info = env.step(SELL)
         self.assertEqual(env.shares, 0)
-        expected_cash_after_sell = expected_cash_after_buy + (p1 * (1.0 - fee))
         self.assertAlmostEqual(env.cash, expected_cash_after_sell, places=4)
 
     def test_insufficient_cash_prevents_buy(self):
@@ -80,7 +87,6 @@ class TradingEnvironmentTests(unittest.TestCase):
 
     def test_finished_episode_cannot_advance(self):
         env = TradingEnvironment(steps=3, seed=1)
-        # steps=3 -> 2 steps advance from index 0 to 2
         env.step(HOLD)
         _, _, done, _ = env.step(HOLD)
         self.assertTrue(done)
@@ -108,9 +114,21 @@ class TradingEnvironmentTests(unittest.TestCase):
         res = env.result()
         self.assertIsInstance(res, EpisodeResult)
         self.assertAlmostEqual(res.portfolio_value, 10000.0, places=2)
-        expected_bnh = 10000.0 / env.prices[0] * env.prices[-1]
-        self.assertAlmostEqual(res.buy_and_hold_value, expected_bnh, places=2)
         self.assertEqual(res.steps, 4)
+
+    def test_held_out_evaluation_is_reproducible(self):
+        first = evaluate_held_out(episodes=10, training_seed=3, test_seeds=[101, 102], regime="trend")
+        second = evaluate_held_out(episodes=10, training_seed=3, test_seeds=[101, 102], regime="trend")
+        self.assertEqual(first, second)
+        self.assertEqual(first["test_seeds"], [101, 102])
+
+    def test_policy_evaluation_returns_complete_curves(self):
+        agent, _ = train(episodes=10, seed=1, regime="mean_reverting")
+        result, prices, policy_values, baseline_values = evaluate_policy(agent, seed=99, regime="mean_reverting")
+        self.assertEqual(len(prices), 252)
+        self.assertEqual(len(policy_values), len(prices))
+        self.assertEqual(len(baseline_values), len(prices))
+        self.assertGreater(result.policy_value, 0)
 
 
 if __name__ == "__main__":

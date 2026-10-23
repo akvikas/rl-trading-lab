@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from random import Random
 
 from .agent import QLearningAgent
-from .environment import ACTIONS, BUY, HOLD, SELL, TradingEnvironment
+from .environment import ACTIONS, BUY, HOLD, SELL, MarketRegime, TradingEnvironment
 from .training import train
 
 
@@ -99,10 +99,11 @@ def run_benchmark(
     steps: int = 252,
     initial_cash: float = 10_000.0,
     transaction_cost: float = 0.001,
+    regime: MarketRegime = "gbm",
 ) -> dict[str, PolicyStats]:
     """Runs training on a dedicated seed, then benchmarks out-of-sample on unseen seeds."""
-    print(f"[*] Training Q-learning agent ({train_episodes} episodes, seed={train_seed})...")
-    agent, _ = train(episodes=train_episodes, seed=train_seed)
+    print(f"[*] Training Q-learning agent ({train_episodes} episodes, seed={train_seed}, regime={regime})...")
+    agent, _ = train(episodes=train_episodes, seed=train_seed, regime=regime)
 
     q_returns, q_values, q_trades = [], [], []
     bnh_returns, bnh_values, bnh_trades = [], [], []
@@ -115,7 +116,7 @@ def run_benchmark(
 
         # 1. Learned Q-Learning policy
         env_q = TradingEnvironment(
-            steps=steps, initial_cash=initial_cash, transaction_cost=transaction_cost, seed=test_seed
+            steps=steps, initial_cash=initial_cash, transaction_cost=transaction_cost, seed=test_seed, regime=regime
         )
         r_q, v_q, t_q = evaluate_policy_on_env(env_q, agent=agent, mode="q_policy")
         q_returns.append(r_q)
@@ -124,7 +125,7 @@ def run_benchmark(
 
         # 2. Buy-and-Hold baseline
         env_bnh = TradingEnvironment(
-            steps=steps, initial_cash=initial_cash, transaction_cost=transaction_cost, seed=test_seed
+            steps=steps, initial_cash=initial_cash, transaction_cost=transaction_cost, seed=test_seed, regime=regime
         )
         r_bnh, v_bnh, t_bnh = evaluate_policy_on_env(env_bnh, mode="buy_and_hold")
         bnh_returns.append(r_bnh)
@@ -133,7 +134,7 @@ def run_benchmark(
 
         # 3. Uniform Random policy
         env_rnd = TradingEnvironment(
-            steps=steps, initial_cash=initial_cash, transaction_cost=transaction_cost, seed=test_seed
+            steps=steps, initial_cash=initial_cash, transaction_cost=transaction_cost, seed=test_seed, regime=regime
         )
         r_rnd, v_rnd, t_rnd = evaluate_policy_on_env(env_rnd, mode="random", seed=test_seed)
         rnd_returns.append(r_rnd)
@@ -147,7 +148,7 @@ def run_benchmark(
     }
 
 
-def format_markdown_report(results: dict[str, PolicyStats], num_seeds: int) -> str:
+def format_markdown_report(results: dict[str, PolicyStats], num_seeds: int, regime: str = "gbm") -> str:
     q = results["Q-Learning (Trained)"]
     bnh = results["Buy-and-Hold (Passive)"]
     rnd = results["Random Policy (Uniform)"]
@@ -158,9 +159,9 @@ def format_markdown_report(results: dict[str, PolicyStats], num_seeds: int) -> s
     win_rate_rnd = (wins_vs_rnd / num_seeds) * 100.0
 
     lines = [
-        "### Benchmark Evaluation Report",
+        f"### Benchmark Evaluation Report (Regime: `{regime}`)",
         "",
-        f"**Evaluation Methodology:** Out-of-sample evaluation across **{num_seeds} reproducible synthetic market seeds** (seeds 1000–{1000 + num_seeds - 1}) generated via Geometric Brownian Motion (252 trading days/steps). All strategies incur a **0.10% (10 bps) transaction fee** per trade. Zero data leakage: training was isolated strictly to training seed 42.",
+        f"**Evaluation Methodology:** Out-of-sample evaluation across **{num_seeds} reproducible synthetic market seeds** (seeds 1000–{1000 + num_seeds - 1}) generated via regime `{regime}` (252 trading days/steps). All strategies incur a **0.10% (10 bps) transaction fee** per trade. Zero data leakage: training was isolated strictly to training seed 42.",
         "",
         "| Strategy | Mean Return | Std Dev (Risk) | Median Return | Min / Max Return | Avg Trades |",
         "|---|---|---|---|---|---|",
@@ -172,7 +173,7 @@ def format_markdown_report(results: dict[str, PolicyStats], num_seeds: int) -> s
         f"- **Win Rate vs Random Policy:** {win_rate_rnd:.1f}% ({wins_vs_rnd}/{num_seeds} episodes)",
         "",
         "> **Key Engineering Takeaway & Limitations:**",
-        "> - **Synthetic Data vs Real Markets:** The simulator uses synthetic Geometric Brownian Motion with constant drift and volatility. It does not account for order book liquidity, slippage, bid-ask spread variations, or macroeconomic structural breaks.",
+        "> - **Synthetic Data vs Real Markets:** The simulator uses synthetic price models with constant parameters. It does not account for order book liquidity, slippage, or macroeconomic regime shifts.",
         "> - **Transaction Cost Sensitivity:** Frequent churn rapidly destroys returns due to compounding commission drag, highlighting the value of transaction-aware reward formulations.",
         "> - **Educational Goal:** This benchmark verifies model learning, out-of-sample evaluation discipline, and pipeline correctness—it is not financial advice or proof of real-world profitability.",
     ]
@@ -185,6 +186,7 @@ def main() -> None:
     parser.add_argument("--train-seed", type=int, default=42, help="Seed for training environment")
     parser.add_argument("--eval-seeds", type=int, default=50, help="Number of test seeds to evaluate")
     parser.add_argument("--eval-seed-start", type=int, default=1000, help="Starting test seed index")
+    parser.add_argument("--regime", choices=("gbm", "trend", "mean_reverting"), default="gbm", help="Market regime")
     args = parser.parse_args()
 
     results = run_benchmark(
@@ -192,8 +194,9 @@ def main() -> None:
         train_seed=args.train_seed,
         num_eval_seeds=args.eval_seeds,
         eval_seed_start=args.eval_seed_start,
+        regime=args.regime,
     )
-    report = format_markdown_report(results, args.eval_seeds)
+    report = format_markdown_report(results, args.eval_seeds, regime=args.regime)
     print("\n" + report)
 
 
